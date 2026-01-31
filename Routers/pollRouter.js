@@ -9,20 +9,22 @@ import {
     getPollResults,
     togglePollStatus
 } from '../Controller/pollController.js';
-import { authMiddleware, adminMiddleware } from '../Middleware/authMiddleware.js';
+import { authMiddleware, adminMiddleware, roleAcceptedMiddleware } from '../Middleware/authMiddleware.js';
 
 const pollRouter = express.Router();
 
-// Public/User routes (require authentication)
-pollRouter.get('/active', authMiddleware, getAllPolls);
-pollRouter.get('/:id', authMiddleware, getPollById);
-pollRouter.get('/:id/results', authMiddleware, getPollResults);
+// Admin routes 
+pollRouter.post('/', authMiddleware, roleAcceptedMiddleware, adminMiddleware, createPoll);
+pollRouter.get('/', authMiddleware, roleAcceptedMiddleware, adminMiddleware, getAllPollsAdmin);
 
-// Admin routes
-pollRouter.post('/', authMiddleware, adminMiddleware, createPoll);
-pollRouter.get('/', authMiddleware, adminMiddleware, getAllPollsAdmin);
-pollRouter.put('/:id', authMiddleware, adminMiddleware, updatePoll);
-pollRouter.delete('/:id', authMiddleware, adminMiddleware, deletePoll);
-pollRouter.patch('/:id/toggle', authMiddleware, adminMiddleware, togglePollStatus);
+// Public/User routes 
+pollRouter.get('/active', authMiddleware, roleAcceptedMiddleware, getAllPolls);
+
+// Parameterized routes
+pollRouter.get('/:id/results', authMiddleware, roleAcceptedMiddleware, getPollResults);
+pollRouter.get('/:id', authMiddleware, roleAcceptedMiddleware, getPollById);
+pollRouter.put('/:id', authMiddleware, roleAcceptedMiddleware, adminMiddleware, updatePoll);
+pollRouter.delete('/:id', authMiddleware, roleAcceptedMiddleware, adminMiddleware, deletePoll);
+pollRouter.put('/:id/toggle', authMiddleware, roleAcceptedMiddleware, adminMiddleware, togglePollStatus);
 
 export default pollRouter;

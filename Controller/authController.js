@@ -1,5 +1,6 @@
 import User from '../Models/UserModel.js';
 import generateToken from '../Utils/generateToken.js';
+import transporter from '../Config/nodemailerAuth.js';
 
 // Register new user
 export const registerUser = async (req, res) => {
@@ -145,7 +146,22 @@ export const loginUser = async (req, res) => {
             });
         }
 
-        // Check password
+        // Check if role has been accepted
+        if (!user.isrRoleAccepted) {
+            return res.status(403).json({
+                success: false,
+                message: 'Verify your email to accept your role'
+            });
+        }
+
+        // Check password (only if role is accepted)
+        if (!user.password) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid email or password'
+            });
+        }
+
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
             return res.status(401).json({
@@ -164,7 +180,8 @@ export const loginUser = async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                isrRoleAccepted: user.isrRoleAccepted
             }
         });
     } catch (error) {
@@ -327,11 +344,8 @@ export const updateUserRole = async (req, res) => {
 // Accept user role
 export const acceptUserRole = async (req, res) => {
     try {
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            { isrRoleAccepted: true },
-            { new: true }
-        ).select('-password');
+        const userId = req.params.id;
+        const user = await User.findById(userId);
 
         if (!user) {
             return res.status(404).json({
@@ -340,10 +354,33 @@ export const acceptUserRole = async (req, res) => {
             });
         }
 
+        user.isrRoleAccepted = true;
+        await user.save();
+
+        // Send email notification
+        try {
+            const mailOptions = {
+                to: user.email,
+                subject: 'Welcome to Internal Polling System',
+                text: `Hello ${user.name},\n\nYour role of ${user.role} has been accepted. You can now log in to your account.\n\nBest regards,\nInternal Polling Management System Team`
+            };
+            await transporter.sendMail(mailOptions);
+            console.log(`Role acceptance email sent to ${user.email}`);
+        } catch (emailError) {
+            console.error('Failed to send role acceptance email:', emailError);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Role accepted successfully',
-            user
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                isrRoleAccepted: user.isrRoleAccepted
+            }
         });
     } catch (error) {
         console.error('Accept user role error:', error);

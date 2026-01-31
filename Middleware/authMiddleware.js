@@ -43,6 +43,26 @@ export const authMiddleware = async (req, res, next) => {
     }
 };
 
+// Check if user has accepted their role
+export const roleAcceptedMiddleware = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({
+            success: false,
+            message: 'User not authenticated'
+        });
+    }
+
+    if (!req.user.isrRoleAccepted) {
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied. Please accept your role first to access this resource.',
+            requiresRoleAcceptance: true
+        });
+    }
+
+    next();
+};
+
 // Check if user is admin
 export const adminMiddleware = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {

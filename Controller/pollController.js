@@ -90,6 +90,14 @@ export const getAllPollsAdmin = async (req, res) => {
 // Get single poll by ID
 export const getPollById = async (req, res) => {
     try {
+        // Validate ObjectId format
+        if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid poll ID format'
+            });
+        }
+
         const poll = await Poll.findById(req.params.id)
             .populate('createdBy', 'name email');
 

@@ -33,11 +33,11 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     }
-}, { timestamps: true });   
+}, { timestamps: true });
 
 // Hash password before saving
 
-userSchema.pre("save", async  function() {
+userSchema.pre("save", async function () {
     if (!this.isModified("password")) {
         return;
     }
@@ -45,12 +45,12 @@ userSchema.pre("save", async  function() {
         const salt = await bcrypt.genSalt(10);
         this.password = await bcrypt.hash(this.password, salt);
     } catch (error) {
-        throw(error);
+        throw (error);
     }
 });
 
 // Method to compare password
-userSchema.methods.comparePassword = async  function(candidatePassword)  {
+userSchema.methods.comparePassword = async function (candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
 };
 

@@ -36,11 +36,10 @@ const pollSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Ensure at least 2 options
-pollSchema.pre('save', function (next) {
+pollSchema.pre('save', function () {
     if (this.options.length < 2) {
-        next(new Error('Poll must have at least 2 options'));
+        throw new Error('Poll must have at least 2 options');
     }
-    next();
 });
 
 const Poll = mongoose.model("poll", pollSchema);
