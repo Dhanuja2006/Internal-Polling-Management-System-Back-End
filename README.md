@@ -29,6 +29,181 @@ The Internal Polling Management System Backend is a robust API designed to handl
 
 ## API Endpoints
 
+---
+
+## Some API Endpoints 
+### 1. User Login
+**Endpoint:** `POST /api/v1/auth/login`
+
+**Request Body:**
+```json
+{
+  "email": "dhanujavidat@gmail.com",
+  "password": "12334"
+}
+```
+
+**Sample Response:**
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "user": {
+    "id": "697e3fb0a31bf92525c579df",
+    "name": "dhanu",
+    "email": "dhanujavidat@gmail.com",
+    "role": "admin",
+    "isrRoleAccepted": true
+  }
+}
+```
+
+---
+
+### 2. Get Current User info
+**Endpoint:** `GET /api/v1/auth/me`
+
+**Sample Response:**
+```json
+{
+  "success": true,
+  "user": {
+    "_id": "697e3fb0a31bf92525c579df",
+    "name": "dhanu",
+    "email": "dhanujavidat@gmail.com",
+    "role": "admin",
+    "isrRoleAccepted": true,
+    "createdAt": "2026-01-31T17:45:20.335Z"
+  }
+}
+```
+
+---
+
+### 3. Create a Poll (Admin Only)
+**Endpoint:** `POST /api/v1/polls/`
+
+**Request Body:**
+```json
+{
+  "title": "Favorite Food",
+  "description": "Vote for your favorite food",
+  "options": ["Pizza", "Burger", "Wraps", "Frankies"]
+}
+```
+
+**Sample Response:**
+```json
+{
+  "success": true,
+  "message": "Poll created successfully",
+  "poll": {
+    "_id": "697e2d0a78825cefbdb5f2a3",
+    "title": "Favorite Food",
+    "description": "Vote for your favorite food",
+    "options": [
+      { "optionText": "Pizza", "votes": 0, "_id": "697e2d0a78825cefbdb5f2a4" },
+      { "optionText": "Burger", "votes": 0, "_id": "697e2d0a78825cefbdb5f2a5" }
+    ],
+    "isActive": true,
+    "createdBy": "697e3fb0a31bf92525c579df"
+  }
+}
+```
+
+---
+
+### 4. Get All Active Polls
+**Endpoint:** `GET /api/v1/polls/active`
+
+**Sample Response:**
+```json
+{
+  "success": true,
+  "count": 2,
+  "polls": [
+    {
+      "_id": "697e2d0a78825cefbdb5f2a3",
+      "title": "Favorite Food",
+      "description": "Vote for your favorite food",
+      "isActive": true,
+      "options": [...]
+    }
+  ]
+}
+```
+
+---
+
+### 5. Get Poll Results
+**Endpoint:** `GET /api/v1/polls/:id/results`
+
+**Sample Response:**
+```json
+{
+  "success": true,
+  "poll": {
+    "id": "697e277615131278f9feac06",
+    "title": "Favorite Programming Language"
+  },
+  "results": [
+    { "optionText": "JavaScript", "votes": 10 },
+    { "optionText": "Python", "votes": 15 }
+  ],
+  "totalVotes": 25
+}
+```
+
+---
+
+### 6. Cast a Vote
+**Endpoint:** `POST /api/v1/votes/`
+
+**Request Body:**
+```json
+{
+  "pollId": "697e277615131278f9feac06",
+  "optionId": "697e277615131278f9feac08"
+}
+```
+
+**Sample Response:**
+```json
+{
+  "success": true,
+  "message": "Vote cast successfully",
+  "vote": {
+    "_id": "697e284515131278f9feac21",
+    "pollId": "697e277615131278f9feac06",
+    "userId": "697e3fb0a31bf92525c579df",
+    "optionId": "697e277615131278f9feac08",
+    "createdAt": "2026-01-31T16:05:25.097Z"
+  }
+}
+```
+
+---
+
+### 7. Get My Voting History
+**Endpoint:** `GET /api/v1/votes/my-votes`
+
+**Sample Response:**
+```json
+{
+  "success": true,
+  "count": 1,
+  "votes": [
+    {
+      "voteId": "697e284515131278f9feac21",
+      "pollId": "697e277615131278f9feac06",
+      "pollTitle": "Favorite Programming Language",
+      "optionText": "Python",
+      "votedAt": "2026-01-31T16:05:25.097Z"
+    }
+  ]
+}
+```
+### All other APIs
 ### Authentication (`/api/v1/auth`)
 
 | Method | Endpoint | Description | Execution Format |
@@ -125,5 +300,6 @@ The Internal Polling Management System Backend is a robust API designed to handl
    ```bash
    npm run dev
    ```
+
 
 
