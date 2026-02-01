@@ -22,7 +22,6 @@ The Internal Polling Management System Backend is a robust API designed to handl
 | :--- | :--- |
 | **Admin** | Full system access. Create/Edit/Delete polls, Manage users, Update roles, View all results. |
 | **User** | Access active polls, Cast a single vote per poll, View own voting history. |
-| **Reviewer** | View results and poll status (permissions extendable based on requirements). |
 
 > **Note:** All users (including Admins) must have their role accepted (`isrRoleAccepted: true`) before accessing protected routes.
 
@@ -126,4 +125,5 @@ The Internal Polling Management System Backend is a robust API designed to handl
    ```bash
    npm run dev
    ```
+
 
