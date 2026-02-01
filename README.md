@@ -95,7 +95,6 @@ The Internal Polling Management System Backend is a robust API designed to handl
 - `pollId`: ObjectId (Ref: Poll)
 - `userId`: ObjectId (Ref: User)
 - `optionId`: ObjectId
-- **Indexes:** Unique compound index on `{ pollId, userId }` to prevent multiple votes.
 
 ---
 
@@ -127,3 +126,4 @@ The Internal Polling Management System Backend is a robust API designed to handl
    ```bash
    npm run dev
    ```
+
