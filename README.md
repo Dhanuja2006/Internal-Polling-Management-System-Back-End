@@ -28,47 +28,47 @@ The Internal Polling Management System Backend is a robust API designed to handl
 
 ---
 
-## 🛠 API Endpoints
+## API Endpoints
 
 ### Authentication (`/api/v1/auth`)
 
 | Method | Endpoint | Description | Execution Format |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/login` | User login | `curl -X POST /api/v1/auth/login -d '{"email":"...", "password":"..."}'` |
-| `POST` | `/register-admin` | Register an admin | `curl -X POST /api/v1/auth/register-admin -d '{"name":"...", "email":"...", ...}'` |
-| `GET` | `/me` | Get current user | `curl -X GET /api/v1/auth/me` |
-| `GET` | `/logout` | Logout user | `curl -X GET /api/v1/auth/logout` |
-| `GET` | `/role-setup/:id` | Accept user role (Public Link) | `curl -X GET /api/v1/auth/role-setup/{userId}` |
-| `PUT` | `/setup-role/:id` | User role setup (Auth Required) | `curl -X PUT /api/v1/auth/setup-role/{userId}` |
-| `GET` | `/all-users` | Get all users (Admin) | `curl -X GET /api/v1/auth/all-users` |
-| `PUT` | `/update-role/:id` | Update user role (Admin) | `curl -X PUT /api/v1/auth/update-role/{userId} -d '{"role":"admin"}'` |
-| `DELETE` | `/delete-user/:id` | Delete user (Admin) | `curl -X DELETE /api/v1/auth/delete-user/{userId}` |
+| `POST` | `/login` | User login | `POST` `/api/v1/auth/login`<br>Body: `{"email":"...", "password":"..."}` |
+| `POST` | `/register-admin` | Register an admin | `POST` `/api/v1/auth/register-admin`<br>Body: `{"name":"...", "email":"...", "adminCode":"..."}` |
+| `GET` | `/me` | Get current user | `GET` `/api/v1/auth/me` |
+| `GET` | `/logout` | Logout user | `GET` `/api/v1/auth/logout` |
+| `GET` | `/role-setup/:id` | Accept user role (Public Link) | `GET` `/api/v1/auth/role-setup/{userId}` |
+| `PUT` | `/setup-role/:id` | User role setup (Auth Required) | `PUT` `/api/v1/auth/setup-role/{userId}` |
+| `GET` | `/all-users` | Get all users (Admin) | `GET` `/api/v1/auth/all-users` |
+| `PUT` | `/update-role/:id` | Update user role (Admin) | `PUT` `/api/v1/auth/update-role/{userId}`<br>Body: `{"role":"admin"}` |
+| `DELETE` | `/delete-user/:id` | Delete user (Admin) | `DELETE` `/api/v1/auth/delete-user/{userId}` |
 
 ### Admin Specifics (`/api/v1/admin`)
 
 | Method | Endpoint | Description | Execution Format |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/create-user` | Direct user creation | `curl -X POST /api/v1/admin/create-user -d '{"name":"...", "email":"..."}'` |
+| `POST` | `/create-user` | Direct user creation | `POST` `/api/v1/admin/create-user`<br>Body: `{"name":"...", "email":"..."}` |
 
 ### Poll Management (`/api/v1/polls`)
 
 | Method | Endpoint | Description | Execution Format |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/` | Create a poll (Admin) | `curl -X POST /api/v1/polls/ -d '{"title":"...", "options":["A", "B"]}'` |
-| `GET` | `/` | Get all polls (Admin) | `curl -X GET /api/v1/polls/` |
-| `GET` | `/active` | Get active polls | `curl -X GET /api/v1/polls/active` |
-| `GET` | `/:id` | Get poll by ID | `curl -X GET /api/v1/polls/{pollId}` |
-| `GET` | `/:id/results` | Get poll results | `curl -X GET /api/v1/polls/{pollId}/results` |
-| `PUT` | `/:id/toggle` | Toggle poll status | `curl -X PUT /api/v1/polls/{pollId}/toggle` |
+| `POST` | `/` | Create a poll (Admin) | `POST` `/api/v1/polls/`<br>Body: `{"title":"...", "options":["A", "B"]}` |
+| `GET` | `/` | Get all polls (Admin) | `GET` `/api/v1/polls/` |
+| `GET` | `/active` | Get active polls | `GET` `/api/v1/polls/active` |
+| `GET` | `/:id` | Get poll by ID | `GET` `/api/v1/polls/{pollId}` |
+| `GET` | `/:id/results` | Get poll results | `GET` `/api/v1/polls/{pollId}/results` |
+| `PUT` | `/:id/toggle` | Toggle poll status | `PUT` `/api/v1/polls/{pollId}/toggle` |
 
-### 🗳 Voting (`/api/v1/votes`)
+### Voting (`/api/v1/votes`)
 
 | Method | Endpoint | Description | Execution Format |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/` | Cast a vote | `curl -X POST /api/v1/votes/ -d '{"pollId":"...", "optionId":"..."}'` |
-| `GET` | `/my-votes` | Get voting history | `curl -X GET /api/v1/votes/my-votes` |
-| `GET` | `/status/:pollId`| Check vote status | `curl -X GET /api/v1/votes/status/{pollId}` |
-| `GET` | `/poll/:pollId` | Get all votes (Admin) | `curl -X GET /api/v1/votes/poll/{pollId}` |
+| `POST` | `/` | Cast a vote | `POST` `/api/v1/votes/`<br>Body: `{"pollId":"...", "optionId":"..."}` |
+| `GET` | `/my-votes` | Get voting history | `GET` `/api/v1/votes/my-votes` |
+| `GET` | `/status/:pollId`| Check vote status | `GET` `/api/v1/votes/status/{pollId}` |
+| `GET` | `/poll/:pollId` | Get all votes (Admin) | `GET` `/api/v1/votes/poll/{pollId}` |
 
 ---
 
@@ -81,7 +81,6 @@ The Internal Polling Management System Backend is a robust API designed to handl
 - `phone`: Number
 - `role`: String (Enum: `['user', 'admin', 'reviewer']`)
 - `isrRoleAccepted`: Boolean (Default: `false`)
-- `profilePic`: String
 
 ### Poll Schema
 - `title`: String (Required, 3-200 chars)
@@ -105,7 +104,7 @@ The Internal Polling Management System Backend is a robust API designed to handl
 
 ---
 
-## 🛠 Local Setup
+## Local Setup
 
 1. **Clone the repository:**
    ```bash
