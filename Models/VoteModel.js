@@ -14,6 +14,12 @@ const voteSchema = new mongoose.Schema({
     optionId: {
         type: mongoose.Schema.Types.ObjectId,
         required: true
+    },
+    ipAddress: {
+        type: String
+    },
+    userAgent: {
+        type: String
     }
 }, { timestamps: true });
 

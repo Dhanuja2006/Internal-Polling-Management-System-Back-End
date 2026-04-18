@@ -1,5 +1,5 @@
 import express from "express";
-import { addUer } from "../Controller/aminControler.js";
+import { addUser } from "../Controller/adminController.js";
 import {
     adminMiddleware,
     authMiddleware,
@@ -11,7 +11,7 @@ const adminRouter = express.Router();
 
 
 // Post Method (require authentication AND role acceptance)
-adminRouter.post("/create-user", authMiddleware, roleAcceptedMiddleware, adminMiddleware, addUer);
+adminRouter.post("/create-user", authMiddleware, roleAcceptedMiddleware, adminMiddleware, addUser);
 
 
 

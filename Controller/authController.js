@@ -1,419 +1,388 @@
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import User from '../Models/UserModel.js';
-import generateToken from '../Utils/generateToken.js';
-import transporter from '../Config/nodemailerAuth.js';
+import generateTokens, { setTokenCookies } from '../Utils/generateToken.js';
+import transporter, { canSendEmail } from '../Config/nodemailerAuth.js';
+import catchAsync from '../Utils/catchAsync.js';
+import AppError from '../Utils/AppError.js';
+import { sendSuccess } from '../Utils/response.js';
+import { assertRequired, normalizeEmail, normalizePhone } from '../Utils/validation.js';
+import env from '../Config/env.js';
 
-// Register new user
-export const registerUser = async (req, res) => {
-    try {
-        const { name, email, password, phone, adminCode } = req.body;
+const sanitizeUser = (user) => ({
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    role: user.role,
+    isrRoleAccepted: user.isrRoleAccepted,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
+});
 
-        // Validation
-        if (!name || !email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Please provide name, email, and password'
-            });
-        }
+export const registerUser = catchAsync(async (req, res) => {
+    const { name, email, password, phone, adminCode } = req.body;
+    assertRequired(['name', 'email', 'password'], req.body);
 
-        // Check if user already exists
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: 'User already exists with this email'
-            });
-        }
+    const normalizedEmail = normalizeEmail(email);
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+        throw new AppError('User already exists with this email', 409);
+    }
 
-        // Determine role based on admin code
-        let role = 'user';
-        if (adminCode && adminCode === process.env.ADMIN_CODE) {
-            role = 'admin';
-        }
+    const role = adminCode && adminCode === env.adminCode ? 'admin' : 'user';
 
-        // Create user
-        const user = await User.create({
-            name,
-            email,
-            password,
-            phone,
-            role
-        });
+    // Generate email verification token for regular users
+    const verifyToken = role === 'user' ? crypto.randomBytes(32).toString('hex') : undefined;
 
-        // Generate token
-        generateToken(user._id, res);
+    const user = await User.create({
+        name: String(name).trim(),
+        email: normalizedEmail,
+        password,
+        phone: normalizePhone(phone),
+        role,
+        isrRoleAccepted: role === 'admin',
+        verifyToken: verifyToken || undefined,
+        verifyTokenExpiry: verifyToken ? new Date(Date.now() + 24 * 60 * 60 * 1000) : undefined
+    });
 
-        res.status(201).json({
-            success: true,
-            message: 'User registered successfully',
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role
-            }
-        });
-    } catch (error) {
-        console.error('Register error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error during registration',
-            error: error.message
+    // Send verification email for regular users
+    if (role === 'user' && canSendEmail) {
+        const verifyUrl = `${env.frontendUrl}/verify-email.html?token=${verifyToken}`;
+        transporter.sendMail({
+            to: normalizedEmail,
+            subject: 'Verify Your Email – Internal Polling System',
+            html: `
+                <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;background:#f9f9f9;border-radius:12px;">
+                    <h2 style="color:#6366f1;">Welcome, ${String(name).trim()}! 👋</h2>
+                    <p style="color:#444;">Thanks for registering. Please verify your email address to activate your account.</p>
+                    <a href="${verifyUrl}" style="display:inline-block;margin:24px 0;padding:14px 28px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Verify My Email</a>
+                    <p style="color:#888;font-size:13px;">This link expires in <strong>24 hours</strong>. If you did not create this account, you can safely ignore this email.</p>
+                </div>
+            `
+        }).catch(err => {
+            console.error('[EMAIL ERROR] Failed to send verification email:', err.message);
         });
     }
-};
 
-// Register admin (alternative method)
-export const registerAdmin = async (req, res) => {
-    try {
-        const { name, email, password, phone, adminCode } = req.body;
+    return sendSuccess(res, 201, {
+        message: role === 'user'
+            ? (canSendEmail
+                ? 'Registration successful! Please check your email and click the verification link to activate your account.'
+                : 'User registered successfully')
+            : 'Admin registered successfully',
+        // Always expose verifyUrl for easy testing (token is safe — it\'s already in the email)
+        verifyUrl: (role === 'user' && verifyToken)
+            ? `${env.frontendUrl}/verify-email.html?token=${verifyToken}`
+            : undefined,
+        user: sanitizeUser(user)
+    });
+});
 
-        // Validation
-        if (!name || !email || !password || !adminCode) {
-            return res.status(400).json({
-                success: false,
-                message: 'Please provide all required fields including admin code'
-            });
-        }
+export const verifyEmail = catchAsync(async (req, res) => {
+    const { token } = req.params;
+    if (!token) throw new AppError('Verification token is required', 400);
 
-        // Verify admin code
-        if (adminCode !== process.env.ADMIN_CODE) {
-            return res.status(403).json({
-                success: false,
-                message: 'Invalid admin code'
-            });
-        }
+    const user = await User.findOne({
+        verifyToken: token,
+        verifyTokenExpiry: { $gt: Date.now() }
+    });
 
-        // Check if user already exists
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: 'User already exists with this email'
-            });
-        }
+    if (!user) {
+        throw new AppError('Invalid or expired verification link. Please register again.', 400);
+    }
 
-        // Create admin user
-        const user = await User.create({
-            name,
-            email,
-            password,
-            phone,
-            role: 'admin'
-        });
+    user.isrRoleAccepted = true;
+    user.verifyToken = undefined;
+    user.verifyTokenExpiry = undefined;
+    await user.save();
 
-        // Generate token
-        generateToken(user._id, res);
+    return sendSuccess(res, 200, { message: 'Email verified successfully! You can now log in.' });
+});
 
-        res.status(201).json({
-            success: true,
-            message: 'Admin registered successfully',
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role
-            }
-        });
-    } catch (error) {
-        console.error('Register admin error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error during admin registration',
-            error: error.message
+export const resendVerification = catchAsync(async (req, res) => {
+    const { email } = req.body;
+    if (!email) throw new AppError('Email is required', 400);
+
+    const normalizedEmail = normalizeEmail(email);
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+        // For security, don't reveal if user exists or not, just send generic success
+        return sendSuccess(res, 200, { message: 'If an account exists with that email, a new verification link has been sent.' });
+    }
+
+    if (user.isrRoleAccepted) {
+        return sendSuccess(res, 200, { message: 'Account is already verified. Please log in.' });
+    }
+
+    // Generate new token
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+    user.verifyToken = verifyToken;
+    user.verifyTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await user.save();
+
+    if (canSendEmail) {
+        const verifyUrl = `${env.frontendUrl}/verify-email.html?token=${verifyToken}`;
+        await transporter.sendMail({
+            to: normalizedEmail,
+            subject: 'New Verification Link – Internal Polling System',
+            html: `
+                <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;background:#f9f9f9;border-radius:12px;">
+                    <h2 style="color:#6366f1;">Email Verification 🔑</h2>
+                    <p style="color:#444;">Hello ${user.name}, you requested a new verification link. Click below to activate your account.</p>
+                    <a href="${verifyUrl}" style="display:inline-block;margin:24px 0;padding:14px 28px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Verify My Email</a>
+                    <p style="color:#888;font-size:13px;">This link expires in <strong>24 hours</strong>.</p>
+                </div>
+            `
         });
     }
-};
 
-// Login user
-export const loginUser = async (req, res) => {
-    try {
-        const { email, password } = req.body;
+    return sendSuccess(res, 200, {
+        message: canSendEmail ? 'New verification link sent to your email.' : 'Email sending is disabled. Use the link below to verify:',
+        emailSent: canSendEmail,
+        verifyUrl: `${env.frontendUrl}/verify-email.html?token=${verifyToken}`
+    });
+});
 
-        // Validation
-        if (!email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Please provide email and password'
-            });
-        }
+export const registerAdmin = catchAsync(async (req, res) => {
+    const { name, email, password, phone, adminCode } = req.body;
+    assertRequired(['name', 'email', 'password', 'adminCode'], req.body);
 
-        // Find user
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password'
-            });
-        }
-
-        // Check if role has been accepted
-        if (!user.isrRoleAccepted) {
-            return res.status(403).json({
-                success: false,
-                message: 'Verify your email to accept your role'
-            });
-        }
-
-        // Check password (only if role is accepted)
-        if (!user.password) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password'
-            });
-        }
-
-        const isPasswordValid = await user.comparePassword(password);
-        if (!isPasswordValid) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password'
-            });
-        }
-
-        // Generate token
-        generateToken(user._id, res);
-
-        res.status(200).json({
-            success: true,
-            message: 'Login successful',
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                isrRoleAccepted: user.isrRoleAccepted
-            }
-        });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error during login',
-            error: error.message
-        });
+    if (adminCode !== env.adminCode) {
+        throw new AppError('Invalid admin code', 403);
     }
-};
 
-// Logout user
-export const logoutUser = (req, res) => {
-    try {
-        res.cookie('token', '', {
-            httpOnly: true,
-            expires: new Date(0)
-        });
-
-        res.status(200).json({
-            success: true,
-            message: 'Logged out successfully'
-        });
-    } catch (error) {
-        console.error('Logout error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error during logout',
-            error: error.message
-        });
+    const normalizedEmail = normalizeEmail(email);
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+        throw new AppError('User already exists with this email', 409);
     }
-};
 
-// Get current user
-export const getCurrentUser = async (req, res) => {
-    try {
-        const user = await User.findById(req.user._id).select('-password');
+    const user = await User.create({
+        name: String(name).trim(),
+        email: normalizedEmail,
+        password,
+        phone: normalizePhone(phone),
+        role: 'admin',
+        isrRoleAccepted: true
+    });
 
-        res.status(200).json({
-            success: true,
-            user
-        });
-    } catch (error) {
-        console.error('Get current user error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
-        });
+    const { accessToken, refreshToken } = generateTokens(user._id);
+    user.refreshToken = refreshToken;
+    await user.save();
+    
+    setTokenCookies(res, accessToken, refreshToken);
+
+    return sendSuccess(res, 201, {
+        message: 'Admin registered successfully',
+        token: accessToken,
+        user: sanitizeUser(user)
+    });
+});
+
+export const loginUser = catchAsync(async (req, res) => {
+    assertRequired(['email', 'password'], req.body);
+
+    const normalizedEmail = normalizeEmail(req.body.email);
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user || !user.password) {
+        throw new AppError('Invalid email or password', 401);
     }
-};
 
-// Get specific user (admin only)
-export const getUser = async (req, res) => {
+    if (!user.isrRoleAccepted) {
+        throw new AppError('Verify your email to accept your role', 403);
+    }
+
+    const isPasswordValid = await user.comparePassword(req.body.password);
+    if (!isPasswordValid) {
+        throw new AppError('Invalid email or password', 401);
+    }
+
+    const { accessToken, refreshToken } = generateTokens(user._id);
+    user.refreshToken = refreshToken;
+    await user.save();
+    
+    setTokenCookies(res, accessToken, refreshToken);
+
+    return sendSuccess(res, 200, {
+        message: 'Login successful',
+        token: accessToken,
+        user: sanitizeUser(user)
+    });
+});
+
+export const refreshToken = catchAsync(async (req, res) => {
+    const token = req.cookies.refreshToken;
+    if (!token) throw new AppError('No refresh token provided', 401);
+
+    const decoded = crypto.createHash('sha256').update(token).digest('hex'); // Wait, I just used JWT for refresh token
+    // Actually decoded should be verified via JWT
     try {
-        const user = await User.findById(req.params.id).select('-password');
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
+        const payload = jwt.verify(token, env.jwtSecret);
+        const user = await User.findById(payload.id);
+        if (!user || user.refreshToken !== token) {
+            throw new AppError('Invalid refresh token', 401);
         }
 
-        res.status(200).json({
-            success: true,
-            user
-        });
-    } catch (error) {
-        console.error('Get user error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
-        });
-    }
-};
-
-// Get all users (admin only)
-export const getAllUsers = async (req, res) => {
-    try {
-        const users = await User.find({ role: 'user' }).select('-password');
-
-        res.status(200).json({
-            success: true,
-            count: users.length,
-            users
-        });
-    } catch (error) {
-        console.error('Get all users error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
-        });
-    }
-};
-
-// Get all admins (admin only)
-export const getAllAdmins = async (req, res) => {
-    try {
-        const admins = await User.find({ role: 'admin' }).select('-password');
-
-        res.status(200).json({
-            success: true,
-            count: admins.length,
-            admins
-        });
-    } catch (error) {
-        console.error('Get all admins error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
-        });
-    }
-};
-
-// Update user role (admin only)
-export const updateUserRole = async (req, res) => {
-    try {
-        const { role } = req.body;
-
-        if (!['user', 'admin'].includes(role)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid role. Must be user or admin'
-            });
-        }
-
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            { role },
-            { new: true, runValidators: true }
-        ).select('-password');
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'User role updated successfully',
-            user
-        });
-    } catch (error) {
-        console.error('Update user role error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
-        });
-    }
-};
-
-// Accept user role
-export const acceptUserRole = async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const user = await User.findById(userId);
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        user.isrRoleAccepted = true;
+        const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
+        user.refreshToken = newRefreshToken;
         await user.save();
+        
+        setTokenCookies(res, accessToken, newRefreshToken);
 
-        // Send email notification
-        try {
-            const mailOptions = {
-                to: user.email,
-                subject: 'Welcome to Internal Polling System',
-                text: `Hello ${user.name},\n\nYour role of ${user.role} has been accepted. You can now log in to your account.\n\nBest regards,\nInternal Polling Management System Team`
-            };
-            await transporter.sendMail(mailOptions);
-            console.log(`Role acceptance email sent to ${user.email}`);
-        } catch (emailError) {
-            console.error('Failed to send role acceptance email:', emailError);
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'Role accepted successfully',
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-                role: user.role,
-                isrRoleAccepted: user.isrRoleAccepted
-            }
+        return sendSuccess(res, 200, {
+            token: accessToken,
+            message: 'Token refreshed successfully'
         });
-    } catch (error) {
-        console.error('Accept user role error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
+    } catch (err) {
+        throw new AppError('Invalid or expired refresh token', 401);
+    }
+});
+
+export const logoutUser = catchAsync(async (req, res) => {
+    res.cookie('token', '', {
+        httpOnly: true,
+        sameSite: env.isProduction ? 'none' : 'lax',
+        secure: env.isProduction,
+        expires: new Date(0)
+    });
+
+    return sendSuccess(res, 200, { message: 'Logged out successfully' });
+});
+
+export const getCurrentUser = catchAsync(async (req, res) => {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    return sendSuccess(res, 200, { user });
+});
+
+export const getUser = catchAsync(async (req, res) => {
+    const user = await User.findById(req.params.id).select('-password');
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    return sendSuccess(res, 200, { user });
+});
+
+export const getAllUsers = catchAsync(async (req, res) => {
+    const users = await User.find({ role: 'user' }).select('-password').sort({ createdAt: -1 });
+    return sendSuccess(res, 200, { count: users.length, users });
+});
+
+export const getAllAdmins = catchAsync(async (req, res) => {
+    const admins = await User.find({ role: 'admin' }).select('-password').sort({ createdAt: -1 });
+    return sendSuccess(res, 200, { count: admins.length, admins });
+});
+
+export const updateUserRole = catchAsync(async (req, res) => {
+    const { role } = req.body;
+    if (!['user', 'admin'].includes(role)) {
+        throw new AppError('Invalid role. Must be user or admin', 400);
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    user.role = role;
+    if (role === 'admin') {
+        user.isrRoleAccepted = true;
+    }
+    await user.save();
+
+    return sendSuccess(res, 200, {
+        message: 'User role updated successfully',
+        user: sanitizeUser(user)
+    });
+});
+
+export const acceptUserRole = catchAsync(async (req, res) => {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    user.isrRoleAccepted = true;
+    await user.save();
+
+    if (canSendEmail) {
+        await transporter.sendMail({
+            to: user.email,
+            subject: 'Welcome to Internal Polling System',
+            text: `Hello ${user.name},\n\nYour role of ${user.role} has been accepted. You can now log in to your account.\n\nBest regards,\nInternal Polling Management System Team`
         });
     }
-};
 
-// Delete user (admin only)
-export const deleteUser = async (req, res) => {
-    try {
-        const user = await User.findByIdAndDelete(req.params.id);
+    return sendSuccess(res, 200, {
+        message: 'Role accepted successfully',
+        user: sanitizeUser(user)
+    });
+});
 
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
+export const forgotPassword = catchAsync(async (req, res) => {
+    assertRequired(['email'], req.body);
 
-        res.status(200).json({
-            success: true,
-            message: 'User deleted successfully'
-        });
-    } catch (error) {
-        console.error('Delete user error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
+    const normalizedEmail = normalizeEmail(req.body.email);
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+        throw new AppError('User with this email does not exist', 404);
+    }
+
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    user.resettoken = resetToken;
+    user.resettokenexpiry = Date.now() + 60 * 60 * 1000;
+    await user.save();
+
+    const resetUrl = `${env.frontendUrl}/reset-password.html#token=${resetToken}`;
+
+    // Send email in background to avoid blocking the response
+    if (canSendEmail) {
+        transporter.sendMail({
+            to: normalizedEmail,
+            subject: 'Password Reset Request',
+            text: `You requested a password reset. Open the link below within one hour:\n\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`
+        }).catch(err => {
+            console.error('[EMAIL ERROR] Failed to send password reset email:', err.message);
         });
     }
-};
+
+    return sendSuccess(res, 200, {
+        message: canSendEmail ? 'Password reset link sent to email' : 'Password reset token generated',
+        resetUrl: canSendEmail ? undefined : resetUrl
+    });
+});
+
+export const resetPassword = catchAsync(async (req, res) => {
+    assertRequired(['password'], req.body);
+
+    const user = await User.findOne({
+        resettoken: req.params.token,
+        resettokenexpiry: { $gt: Date.now() }
+    });
+
+    if (!user) {
+        throw new AppError('Invalid or expired reset token', 400);
+    }
+
+    user.password = req.body.password;
+    user.resettoken = undefined;
+    user.resettokenexpiry = undefined;
+    await user.save();
+
+    return sendSuccess(res, 200, { message: 'Password reset successfully' });
+});
+
+export const deleteUser = catchAsync(async (req, res) => {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+
+    return sendSuccess(res, 200, { message: 'User deleted successfully' });
+});

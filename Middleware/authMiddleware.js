@@ -1,88 +1,60 @@
 import jwt from 'jsonwebtoken';
 import User from '../Models/UserModel.js';
+import env from '../Config/env.js';
+import AppError from '../Utils/AppError.js';
+import catchAsync from '../Utils/catchAsync.js';
 
-// Verify JWT token and attach user to request
-export const authMiddleware = async (req, res, next) => {
-    try {
-        let token;
+export const authMiddleware = catchAsync(async (req, res, next) => {
+    let token;
 
-        // Check for token in cookies or Authorization header
-        if (req.cookies.token) {
-            token = req.cookies.token;
-        } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-            token = req.headers.authorization.split(' ')[1];
-        }
-
-        if (!token) {
-            return res.status(401).json({
-                success: false,
-                message: 'Not authorized, no token provided'
-            });
-        }
-
-        // Verify token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        // Get user from token
-        req.user = await User.findById(decoded.id).select('-password');
-
-        if (!req.user) {
-            return res.status(401).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        next();
-    } catch (error) {
-        console.error('Auth middleware error:', error);
-        return res.status(401).json({
-            success: false,
-            message: 'Not authorized, token failed'
-        });
+    if (req.cookies.token) {
+        token = req.cookies.token;
+    } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+        token = req.headers.authorization.split(' ')[1];
     }
-};
 
-// Check if user has accepted their role
+    if (!token) {
+        throw new AppError('Not authorized, no token provided', 401);
+    }
+
+    const decoded = jwt.verify(token, env.jwtSecret);
+    req.user = await User.findById(decoded.id).select('-password');
+
+    if (!req.user) {
+        throw new AppError('User not found', 401);
+    }
+
+    next();
+});
+
 export const roleAcceptedMiddleware = (req, res, next) => {
     if (!req.user) {
-        return res.status(401).json({
-            success: false,
-            message: 'User not authenticated'
-        });
+        return next(new AppError('User not authenticated', 401));
     }
 
     if (!req.user.isrRoleAccepted) {
-        return res.status(403).json({
-            success: false,
-            message: 'Access denied. Please accept your role first to access this resource.',
-            requiresRoleAcceptance: true
-        });
+        return next(
+            new AppError('Access denied. Please accept your role first to access this resource.', 403, {
+                requiresRoleAcceptance: true
+            })
+        );
     }
 
     next();
 };
 
-// Check if user is admin
 export const adminMiddleware = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
-        next();
-    } else {
-        return res.status(403).json({
-            success: false,
-            message: 'Access denied. Admin privileges required.'
-        });
+        return next();
     }
+
+    return next(new AppError('Access denied. Admin privileges required.', 403));
 };
 
-// Check if user is regular user (not admin)
 export const userMiddleware = (req, res, next) => {
     if (req.user && req.user.role === 'user') {
-        next();
-    } else {
-        return res.status(403).json({
-            success: false,
-            message: 'Access denied. User privileges required.'
-        });
+        return next();
     }
+
+    return next(new AppError('Access denied. User privileges required.', 403));
 };

@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const pollSchema = new mongoose.Schema({
     title: {
@@ -17,13 +17,32 @@ const pollSchema = new mongoose.Schema({
         optionText: {
             type: String,
             required: [true, 'Option text is required'],
-            trim: true
-        },
-        votes: {
-            type: Number,
-            default: 0
+            trim: true,
+            minlength: [1, 'Option text cannot be empty'],
+            maxlength: [120, 'Option text cannot exceed 120 characters']
         }
     }],
+    orgId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'organization'
+    },
+    visibility: {
+        type: String,
+        enum: ['public', 'private'],
+        default: 'public'
+    },
+    isAnonymous: {
+        type: Boolean,
+        default: false
+    },
+    startTime: {
+        type: Date,
+        default: Date.now
+    },
+    endTime: {
+        type: Date,
+        required: [true, 'End time is required']
+    },
     isActive: {
         type: Boolean,
         default: true
@@ -35,13 +54,15 @@ const pollSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Ensure at least 2 options
-pollSchema.pre('save', function () {
+pollSchema.pre('save', async function () {
     if (this.options.length < 2) {
         throw new Error('Poll must have at least 2 options');
     }
+    if (this.endTime <= this.startTime) {
+        throw new Error('End time must be after start time');
+    }
 });
 
-const Poll = mongoose.model("poll", pollSchema);
+const Poll = mongoose.model('poll', pollSchema);
 
 export default Poll;

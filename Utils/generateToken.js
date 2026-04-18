@@ -1,17 +1,32 @@
 import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
-dotenv.config();
+import env from '../Config/env.js';
 
-const generateToken = (id , res) => {
-    const token = jwt.sign({id}, process.env.JWT_SECRET, {
-        expiresIn: '8h',
+const generateTokens = (id) => {
+    const accessToken = jwt.sign({ id }, env.jwtSecret, {
+        expiresIn: '15m'
     });
 
-    res.cookie('token', token, {
-        httpOnly: true ,
-        sameSite: 'strict',
-        maxAga: 8*60*60*1000
-    })
-}
+    const refreshToken = jwt.sign({ id }, env.jwtSecret, {
+        expiresIn: '7d'
+    });
 
-export default generateToken;
+    return { accessToken, refreshToken };
+};
+
+export const setTokenCookies = (res, accessToken, refreshToken) => {
+    res.cookie('token', accessToken, {
+        httpOnly: true,
+        sameSite: env.isProduction ? 'none' : 'lax',
+        secure: env.isProduction,
+        maxAge: 15 * 60 * 1000 // 15 mins
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        sameSite: env.isProduction ? 'none' : 'lax',
+        secure: env.isProduction,
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+};
+
+export default generateTokens;

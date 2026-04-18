@@ -1,13 +1,14 @@
 import nodemailer from 'nodemailer';
-import dotenv from 'dotenv';
-dotenv.config();
+import env from './env.js';
 
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: env.emailUser,
+        pass: env.emailPass
     }
 });
+
+export const canSendEmail = Boolean(env.emailUser && env.emailPass);
 
 export default transporter;

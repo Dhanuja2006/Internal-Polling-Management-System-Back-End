@@ -1,30 +1,42 @@
 import express from 'express';
 import {
     createPoll,
-    getAllPolls,
-    getAllPollsAdmin,
+    getOrgPolls,
+    getActivePolls,
     getPollById,
+    getAllPollsAdmin,
     updatePoll,
     deletePoll,
     getPollResults,
-    togglePollStatus
+    togglePollStatus,
+    getRecommendedPolls
 } from '../Controller/pollController.js';
-import { authMiddleware, adminMiddleware, roleAcceptedMiddleware } from '../Middleware/authMiddleware.js';
+import { getPollInsights } from '../Controller/insightsController.js';
+import { authMiddleware, adminMiddleware } from '../Middleware/authMiddleware.js';
 
 const pollRouter = express.Router();
 
-// Admin routes 
-pollRouter.post('/', authMiddleware, roleAcceptedMiddleware, adminMiddleware, createPoll);
-pollRouter.get('/', authMiddleware, roleAcceptedMiddleware, adminMiddleware, getAllPollsAdmin);
+pollRouter.use(authMiddleware);
 
-// Public/User routes 
-pollRouter.get('/active', authMiddleware, roleAcceptedMiddleware, getAllPolls);
+// Create poll (RBAC check is inside controller based on orgId)
+pollRouter.post('/', createPoll);
+
+// Global list for admins
+pollRouter.get('/', adminMiddleware, getAllPollsAdmin);
+
+// Compatibility routes (Before parameterized routes)
+pollRouter.get('/active', getActivePolls);
+pollRouter.get('/recommended', getRecommendedPolls);
+
+// Get polls for specific organization
+pollRouter.get('/org/:orgId', getOrgPolls);
 
 // Parameterized routes
-pollRouter.get('/:id/results', authMiddleware, roleAcceptedMiddleware, getPollResults);
-pollRouter.get('/:id', authMiddleware, roleAcceptedMiddleware, getPollById);
-pollRouter.put('/:id', authMiddleware, roleAcceptedMiddleware, adminMiddleware, updatePoll);
-pollRouter.delete('/:id', authMiddleware, roleAcceptedMiddleware, adminMiddleware, deletePoll);
-pollRouter.put('/:id/toggle', authMiddleware, roleAcceptedMiddleware, adminMiddleware, togglePollStatus);
+pollRouter.get('/:id/results', getPollResults);
+pollRouter.get('/:id/insights', getPollInsights);
+pollRouter.get('/:id', getPollById);
+pollRouter.put('/:id', updatePoll);
+pollRouter.delete('/:id', deletePoll);
+pollRouter.put('/:id/toggle', togglePollStatus);
 
 export default pollRouter;

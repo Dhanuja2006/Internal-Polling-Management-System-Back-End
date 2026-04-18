@@ -5,16 +5,15 @@ import {
     checkVoteStatus,
     getPollVotes
 } from '../Controller/voteController.js';
-import { authMiddleware, adminMiddleware, roleAcceptedMiddleware } from '../Middleware/authMiddleware.js';
+import { authMiddleware } from '../Middleware/authMiddleware.js';
 
 const voteRouter = express.Router();
 
-// User routes (require authentication AND role acceptance)
-voteRouter.post('/', authMiddleware, roleAcceptedMiddleware, castVote);
-voteRouter.get('/my-votes', authMiddleware, roleAcceptedMiddleware, getMyVotes);
-voteRouter.get('/status/:pollId', authMiddleware, roleAcceptedMiddleware, checkVoteStatus);
+voteRouter.use(authMiddleware);
 
-// Admin routes (require authentication AND role acceptance)
-voteRouter.get('/poll/:pollId', authMiddleware, roleAcceptedMiddleware, adminMiddleware, getPollVotes);
+voteRouter.post('/', castVote);
+voteRouter.get('/my-votes', getMyVotes);
+voteRouter.get('/status/:pollId', checkVoteStatus);
+voteRouter.get('/poll/:pollId', getPollVotes);
 
 export default voteRouter;
